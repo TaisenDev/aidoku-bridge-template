@@ -13,7 +13,8 @@ impl Bridge {
         let base = defaults_get::<String>("serverUrl").filter(|s| !s.is_empty())
             .ok_or(aidoku::AidokuError::Message(String::from("Set the Suwayomi server URL in source settings")))?;
         let u = defaults_get::<String>("username").filter(|s| !s.is_empty());
-        let p = defaults_get::<String>("password").filter(|s| !s.is_empty());
+        let p = defaults_get::<String>("password").filter(|s| !s.is_empty())
+            .map(|raw| suwayomi::deobf(&raw, &base, &u).unwrap_or(raw));
         let src = defaults_get::<String>("sourceId").filter(|s| !s.is_empty())
             .ok_or(aidoku::AidokuError::Message(String::from("Set the Suwayomi source ID in source settings")))?;
         Ok((base, u, p, src))

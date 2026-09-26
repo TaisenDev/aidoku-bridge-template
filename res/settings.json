@@ -7,7 +7,7 @@
       { "type": "text", "key": "username", "title": "Username", "placeholder": "user" },
       { "type": "text", "key": "password", "title": "Password", "placeholder": "pass", "secure": true }
     ]},
-  { "type": "group", "title": "Source", "footer": "Keiyoushi mangasin source id from VPS sources query.",
+  { "type": "group", "title": "Source", "footer": "Suwayomi Source ID",
     "items": [
       { "type": "text", "key": "sourceId", "title": "Suwayomi Source ID", "placeholder": "3142617638635917969" }
     ]}

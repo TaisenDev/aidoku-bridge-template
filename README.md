@@ -142,7 +142,7 @@ The generated Aidoku source uses the following runtime settings:
 | --- | --- | --- |
 | `serverUrl` | Yes | Publicly reachable Suwayomi URL, e.g. `https://suwayomi.example.com` |
 | `username` | Conditional | HTTP Basic Auth username when the server/proxy is protected |
-| `password` | Conditional | HTTP Basic Auth password when authentication is required |
+| `password` | Conditional | HTTP Basic Auth password; accepts plaintext or builder-baked `obf1:` value (auto-decoded, fails closed on mismatch) |
 | `sourceId` | Yes | Numeric Suwayomi source ID |
 
 The builder pre-populates the source metadata and settings for every generated `.aix` package.
@@ -161,7 +161,8 @@ The bridge is designed around a server-side architecture:
 
 - Aidoku talks to your Suwayomi instance instead of directly implementing each website integration.
 - Page URLs are returned by Suwayomi and consumed by Aidoku when reading.
-- Credentials may be supplied through source settings; the builder can optionally bake them into generated packages.
+- Credentials may be supplied through source settings; the builder can optionally bake them into generated packages (obfuscated as `obf1:`, decoded at runtime by `deobf` in `src/suwayomi.rs`).
+- A baked password bound to a different server/username decodes to garbage and fails closed — retype the password after changing those fields.
 - Never commit real credentials, proxy passwords, or private server URLs to source control.
 
 > [!WARNING]
