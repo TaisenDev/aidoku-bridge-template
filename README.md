@@ -147,6 +147,31 @@ The generated Aidoku source uses the following runtime settings:
 
 The builder pre-populates the source metadata and settings for every generated `.aix` package.
 
+## Manga keys (stable vs legacy)
+
+Aidoku identifies library entries by the opaque `key` the bridge returns.
+Two formats exist, both accepted on every call:
+
+- **Stable (new):** `sm|<sourceId>|<absolute manga URL>`. Survives server DB
+  wipes: the bridge resolves it to the current numeric ID via
+  `addMangaFromUrl` (finds existing, installs the extension if missing) and
+  caches the result in-session. Resolution never guesses — failures are hard
+  errors, so a corrupt key can never silently open the wrong manga.
+- **Legacy:** plain numeric Suwayomi row ID. Keeps working unchanged, but dies
+  with the DB (same row number may belong to another manga afterwards).
+
+Listings emit stable keys whenever the extension provides an absolute URL
+(`realUrl`, refreshed on details); otherwise they fall back to numeric.
+Details refresh also rewrites the stored cover URL from the resolved ID, so
+covers self-heal on open. Chapter keys stay numeric: the library survives a
+wipe, per-chapter progress may reset.
+
+`MigrationHandler` is implemented per the Aidoku docs (numeric → stable via
+live details, failures keep the old key), but `breakingChangeVersion` is
+deliberately **not** shipped: legacy keys still work, so no migration is
+needed. After a server DB wipe, migrate manually in Aidoku first — auto
+migration cannot tell a corrupt numeric key apart from a valid one.
+
 ## Add-by-URL
 
 All normal browsing, search, details, chapters, filters, covers, and reader flows work against stock Suwayomi.

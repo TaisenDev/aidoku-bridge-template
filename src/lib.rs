@@ -1,15 +1,21 @@
 #![no_std]
 use aidoku::{alloc::{String, Vec, format, borrow::Cow}, imports::{defaults::defaults_get, net::Request},
     prelude::*, Chapter, Filter, FilterKind, FilterValue, Listing, ListingProvider, Manga, MangaPageResult, MangaStatus,
-    Page, PageContent, Result, Source, DynamicFilters, ImageRequestProvider};
+    Page, PageContent, Result, Source, DynamicFilters, ImageRequestProvider, MigrationHandler};
 
 mod suwayomi;
 use suwayomi::SmManga;
 
-struct Bridge;
+struct Bridge { ids: core::cell::RefCell<Vec<(String, i32)>> }
 
 impl Bridge {
-    fn cfg(&self) -> Result<(String, Option<String>, Option<String>, String)> {
+    fn resolved_id(&self, base: &str, u: &Option<String>, p: &Option<String>, src: &str, key: &str) -> Result<i32> {
+        if let Ok(id) = key.parse::<i32>() { return Ok(id); }
+        if let Some((_, id)) = self.ids.borrow().iter().find(|(k, _)| k == key) { return Ok(*id); }
+        let id = suwayomi::resolve_manga_id(base, u, p, src, key)?;
+        self.ids.borrow_mut().push((String::from(key), id));
+        Ok(id)
+    }    fn cfg(&self) -> Result<(String, Option<String>, Option<String>, String)> {
         let base = defaults_get::<String>("serverUrl").filter(|s| !s.is_empty())
             .ok_or(aidoku::AidokuError::Message(String::from("Set the Suwayomi server URL in source settings")))?;
         let u = defaults_get::<String>("username").filter(|s| !s.is_empty());
@@ -19,8 +25,8 @@ impl Bridge {
             .ok_or(aidoku::AidokuError::Message(String::from("Set the Suwayomi source ID in source settings")))?;
         Ok((base, u, p, src))
     }
-    fn manga(m: &SmManga, base: &str) -> Manga {
-        Manga { key: format!("{}", m.id), title: m.title.clone(),
+    fn manga(m: &SmManga, base: &str, src: &str) -> Manga {
+        Manga { key: suwayomi::manga_key(src, m), title: m.title.clone(),
             cover: Some(format!("{base}/api/v1/manga/{}/thumbnail", m.id)),
             authors: m.author.clone().filter(|s| !s.is_empty()).map(|a| Vec::from([a])),
             artists: m.artist.clone().filter(|s| !s.is_empty()).map(|a| Vec::from([a])),
@@ -90,14 +96,14 @@ impl DynamicFilters for Bridge {
 }
 
 impl Source for Bridge {
-    fn new() -> Self { Self }
+    fn new() -> Self { Self { ids: core::cell::RefCell::new(Vec::new()) } }
     fn get_search_manga_list(&self, query: Option<String>, page: i32, f: Vec<FilterValue>) -> Result<MangaPageResult> {
         let (base, u, p, src) = self.cfg()?;
         let q = query.unwrap_or_default();
         if q.trim_start().starts_with("http") {
             let r = suwayomi::add_by_url(&base, &u, &p, q.trim())?;
             if let Some(m) = r.manga {
-                return Ok(MangaPageResult { entries: Vec::from([Self::manga(&m, &base)]), has_next_page: false });
+                return Ok(MangaPageResult { entries: Vec::from([Self::manga(&m, &base, &src)]), has_next_page: false });
             }
             return Err(error!("add-by-url: {:?}", r.message.unwrap_or_default()));
         }
@@ -116,12 +122,12 @@ impl Source for Bridge {
             }).collect()
         };
         let d = suwayomi::fetch_source(&base, &u, &p, &src, "SEARCH", Some(&q), page, &changes)?;
-        Ok(MangaPageResult { entries: d.mangas.iter().map(|m| Self::manga(m, &base)).collect(),
+        Ok(MangaPageResult { entries: d.mangas.iter().map(|m| Self::manga(m, &base, &src)).collect(),
             has_next_page: d.has_next_page.unwrap_or(false) })
     }
     fn get_manga_update(&self, mut manga: Manga, need_d: bool, need_c: bool) -> Result<Manga> {
-        let (base, u, p, _s) = self.cfg()?;
-        let id: i32 = manga.key.parse().map_err(|_| error!("bad manga key"))?;
+        let (base, u, p, s) = self.cfg()?;
+        let id = self.resolved_id(&base, &u, &p, &s, &manga.key)?;
         if need_c {
             let cs = suwayomi::fetch_chapters(&base, &u, &p, id)?;
             manga.chapters = Some(cs.into_iter().map(|c| Chapter {
@@ -132,8 +138,10 @@ impl Source for Bridge {
                 url: c.real_url, ..Default::default() }).collect());
         }
         if need_d {
+            manga.cover = Some(format!("{base}/api/v1/manga/{id}/thumbnail"));
             if let Ok(d) = suwayomi::fetch_manga_details(&base, &u, &p, id) {
                 if !d.title.is_empty() { manga.title = d.title.clone(); }
+                if let Some(u) = d.real_url.clone().or(d.url.clone()).filter(|s| !s.is_empty()) { manga.url = Some(u); }
                 if d.description.as_deref().map(|s| !s.is_empty()).unwrap_or(false) { manga.description = d.description.clone(); }
                 if let Some(a) = d.author.filter(|s| !s.is_empty()) { manga.authors = Some(Vec::from([a])); }
                 if let Some(a) = d.artist.filter(|s| !s.is_empty()) { manga.artists = Some(Vec::from([a])); }
@@ -163,7 +171,7 @@ impl ListingProvider for Bridge {
         let ty = match listing.id.as_str() { "popular" => "POPULAR", "latest" => "LATEST",
             _ => return Err(error!("unknown listing {}", listing.id)) };
         let d = suwayomi::fetch_source(&base, &u, &p, &src, ty, None, page, &[])?;
-        Ok(MangaPageResult { entries: d.mangas.iter().map(|m| Self::manga(m, &base)).collect(),
+        Ok(MangaPageResult { entries: d.mangas.iter().map(|m| Self::manga(m, &base, &src)).collect(),
             has_next_page: d.has_next_page.unwrap_or(false) })
     }
 }
@@ -180,4 +188,32 @@ impl ImageRequestProvider for Bridge {
     }
 }
 
-register_source!(Bridge, ListingProvider, ImageRequestProvider, DynamicFilters);
+register_source!(Bridge, ListingProvider, ImageRequestProvider, DynamicFilters, MigrationHandler);
+
+impl MigrationHandler for Bridge {
+    /// Doc-sanctioned key migration path (runs only when the bridge ships
+    /// `config.breakingChangeVersion`, which we do NOT set yet: numeric keys
+    /// keep working, so no migration is needed. If it is ever enabled, this
+    /// converts legacy numeric keys to stable keys via live details; any
+    /// failure keeps the old key instead of breaking the batch. NOTE: after
+    /// a server DB wipe, numeric keys point at the wrong manga — migrate
+    /// manually in Aidoku BEFORE updating to a breakingChangeVersion build.
+    fn handle_manga_migration(&self, key: String) -> Result<String> {
+        if key.starts_with("sm|") { return Ok(key); }
+        let id: i32 = match key.parse() { Ok(n) => n, Err(_) => return Ok(key) };
+        let (base, u, p, src) = match self.cfg() { Ok(c) => c, Err(_) => return Ok(key) };
+        match suwayomi::fetch_manga_details(&base, &u, &p, id) {
+            Ok(d) => {
+                let m = SmManga { id, title: d.title.clone(), thumbnail_url: None,
+                    description: None, author: None, artist: None, genre: None,
+                    status: None, real_url: d.real_url.clone(), url: d.url.clone() };
+                let nk = suwayomi::manga_key(&src, &m);
+                if nk == key { Ok(key) } else { Ok(nk) }
+            }
+            Err(_) => Ok(key),
+        }
+    }
+    fn handle_chapter_migration(&self, _manga_key: String, chapter_key: String) -> Result<String> {
+        Ok(chapter_key)
+    }
+}

@@ -216,6 +216,32 @@ pub fn abs(base: &str, path: &str) -> String {
     else { format!("{base}{path}") }
 }
 
+/// Stable manga key for Aidoku: `sm|<sourceId>|<absoluteUrl>`.
+/// Falls back to the numeric row id when the extension provides no absolute
+/// URL. Numeric (legacy) keys keep working forever through resolve_manga_id.
+pub fn manga_key(src: &str, m: &SmManga) -> String {
+    let url = m.real_url.clone().or(m.url.clone()).unwrap_or_default();
+    if url.starts_with("http://") || url.starts_with("https://") {
+        format!("sm|{src}|{url}")
+    } else {
+        format!("{}", m.id)
+    }
+}
+
+/// Resolve an Aidoku manga key to the current numeric Suwayomi id.
+/// Legacy numeric keys pass through. Stable keys resolve via add-by-URL
+/// (finds existing, installs extension if missing). NEVER guesses:
+/// unparseable keys and resolution failures are hard errors, so a corrupt
+/// key can never silently open the wrong manga and poison the library.
+pub fn resolve_manga_id(base: &str, u: &Option<String>, p: &Option<String>, src: &str, key: &str) -> Result<i32> {
+    if let Ok(id) = key.parse::<i32>() { return Ok(id); }
+    let rest = key.strip_prefix("sm|").ok_or(error!("bad manga key"))?;
+    let (s, url) = rest.split_once('|').ok_or(error!("bad manga key"))?;
+    if s != src || url.is_empty() { return Err(error!("manga key mismatch")); }
+    let r = add_by_url(base, u, p, url)?;
+    r.manga.map(|m| m.id).ok_or(error!("could not resolve manga"))
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SmFull { pub fetch_manga_and_chapters: SmFullPayload }
