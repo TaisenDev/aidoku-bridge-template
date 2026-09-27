@@ -1,13 +1,5 @@
 [
-  { "type": "group", "title": "Server", "items": [
-    { "type": "text", "key": "serverUrl", "title": "Suwayomi Server URL", "placeholder": "https://suwayomi.example.com" }
-  ]},
-  { "type": "group", "title": "Auth (Caddy Basic)", "footer": "Sent as Authorization header on GraphQL + images.",
-    "items": [
-      { "type": "text", "key": "username", "title": "Username", "placeholder": "user" },
-      { "type": "text", "key": "password", "title": "Password", "placeholder": "pass", "secure": true }
-    ]},
-  { "type": "group", "title": "Source", "footer": "Suwayomi Source ID",
+  { "type": "group", "title": "Source", "footer": "Preconfigurado automáticamente, no tocar.",
     "items": [
       { "type": "text", "key": "sourceId", "title": "Suwayomi Source ID", "placeholder": "3142617638635917969" }
     ]}

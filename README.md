@@ -140,10 +140,11 @@ The generated Aidoku source uses the following runtime settings:
 
 | Key | Required | Description |
 | --- | --- | --- |
-| `serverUrl` | Yes | Publicly reachable Suwayomi URL, e.g. `https://suwayomi.example.com` |
-| `username` | Conditional | HTTP Basic Auth username when the server/proxy is protected |
-| `password` | Conditional | HTTP Basic Auth password; accepts plaintext or builder-baked `obf1:` value (auto-decoded, fails closed on mismatch) |
-| `sourceId` | Yes | Numeric Suwayomi source ID |
+| `sourceId` | Yes | Numeric Suwayomi source ID (baked per bridge, user never touches it) |
+
+Server URL and optional access token are baked into the WASM at build time
+(`BRIDGE_API_URL`, `BRIDGE_TOKEN`), so installed bridges carry zero
+user-facing configuration.
 
 The builder pre-populates the source metadata and settings for every generated `.aix` package.
 
@@ -187,11 +188,13 @@ Without that server-side capability, only add-by-URL is unavailable; the rest of
 
 The bridge is designed around a server-side architecture:
 
-- Aidoku talks to your Suwayomi instance instead of directly implementing each website integration.
+- Aidoku talks to your gateway/Suwayomi through the baked-in API URL instead of directly implementing each website integration.
 - Page URLs are returned by Suwayomi and consumed by Aidoku when reading.
-- Credentials may be supplied through source settings; the builder can optionally bake them into generated packages (obfuscated as `obf1:`, decoded at runtime by `deobf` in `src/suwayomi.rs`).
-- A baked password bound to a different server/username decodes to garbage and fails closed — retype the password after changing those fields.
-- Never commit real credentials, proxy passwords, or private server URLs to source control.
+- The optional access token is baked into the WASM at build time (XORed with
+  a per-build salt): a deterrent against casual extraction, not a secret.
+  Anyone with the binary and this source can recover it — real isolation is
+  the gateway's scoped allowlist, not the token.
+- Never commit real tokens or private server URLs to source control.
 
 > [!WARNING]
 > If credentials are baked into a `.aix` package, anyone who obtains that package may be able to recover those credentials. Treat such packages as containing server access.

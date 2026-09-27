@@ -34,6 +34,10 @@ jobs:
           fi
 
       - name: Package + verify
+        env:
+          # Placeholder deployment config: validates compilation. Real
+          # deployments rebuild with their own BRIDGE_API_URL/BRIDGE_TOKEN.
+          BRIDGE_API_URL: https://suwayomi.example.com
         run: |
           aidoku package .
           aidoku verify package.aix
