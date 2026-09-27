@@ -168,10 +168,12 @@ covers self-heal on open. Chapter keys stay numeric: the library survives a
 wipe, per-chapter progress may reset.
 
 `MigrationHandler` is implemented per the Aidoku docs (numeric → stable via
-live details, failures keep the old key), but `breakingChangeVersion` is
-deliberately **not** shipped: legacy keys still work, so no migration is
-needed. After a server DB wipe, migrate manually in Aidoku first — auto
-migration cannot tell a corrupt numeric key apart from a valid one.
+live details, failures keep the old key), and the builder ships
+`breakingChangeVersion` set to each package's own version, so migration runs
+exactly on package update. Only upgrade to a migrating build once every
+stored numeric key is valid: after a server DB wipe, migrate manually in
+Aidoku first — auto migration cannot tell a corrupt numeric key apart from
+a valid one.
 
 ## Add-by-URL
 
