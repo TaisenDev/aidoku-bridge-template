@@ -152,11 +152,12 @@ The builder pre-populates the source metadata and settings for every generated `
 Aidoku identifies library entries by the opaque `key` the bridge returns.
 Two formats exist, both accepted on every call:
 
-- **Stable (new):** `sm|<sourceId>|<absolute manga URL>`. Survives server DB
-  wipes: the bridge resolves it to the current numeric ID via
-  `addMangaFromUrl` (finds existing, installs the extension if missing) and
-  caches the result in-session. Resolution never guesses — failures are hard
-  errors, so a corrupt key can never silently open the wrong manga.
+- **Stable (new):** `sm|<sourceId>|<rowId>|<absolute manga URL>`. Survives
+  server DB wipes. Resolution tries the embedded row ID first, verified live
+  (details URL must equal the key URL — a wiped DB reuses row numbers, the
+  check catches it), then URL resolution via `addMangaFromUrl`. Covers
+  search-URL keys (extensions reporting a search page as `realUrl`) and
+  post-wipe rows. Resolution never guesses — failures are hard errors.
 - **Legacy:** plain numeric Suwayomi row ID. Keeps working unchanged, but dies
   with the DB (same row number may belong to another manga afterwards).
 
